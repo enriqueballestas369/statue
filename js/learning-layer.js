@@ -117,23 +117,9 @@
     "WHY": "The stated reason the agency, court, or drafter is taking the action.",
     "OLD RULE": "The legal rule or practice that existed before the change.",
     "NEW RULE": "The new legal requirement, standard, or practice created or adopted by the document.",
-    "EFFECTIVE DATE": "The date the legal change actually begins to apply. It may differ from the publication date."
+    "EFFECTIVE DATE": "The date the legal change actually begins to apply. It may differ from the publication date.",
+    "DOCUMENT SECTION": "A structural heading in the original document. Statute is not assigning a legal conclusion to it."
   };
-
-  const SECTION_RULES = [
-    [/\b(background|factual background|facts|procedural history)\b/i, "BACKGROUND / FACTS"],
-    [/\b(legal standard|standard of review)\b/i, "RULE / LEGAL STANDARD"],
-    [/\b(discussion|analysis)\b/i, "REASONING / ANALYSIS"],
-    [/\b(conclusion and order|conclusion|order)\b/i, "HOLDING / REMEDY"],
-    [/\b(remedy|relief)\b/i, "REMEDY"],
-    [/\b(jurisdiction)\b/i, "JURISDICTION"],
-    [/\b(effective date)\b/i, "WHEN IT APPLIES"],
-    [/\b(authority|statutory authority)\b/i, "LEGAL AUTHORITY"],
-    [/\b(definitions?)\b/i, "DEFINITIONS"],
-    [/\b(exceptions?|exemptions?)\b/i, "EXCEPTIONS / LIMITS"],
-    [/\b(requirements?|obligations?|duties)\b/i, "OPERATIVE RULE"],
-    [/\b(enforcement|penalties|remedies)\b/i, "ENFORCEMENT / CONSEQUENCE"]
-  ];
 
   let supportLevel = localStorage.getItem("statute-reading-support") || "high";
   let lastAnnotatedRoot = null;
@@ -157,17 +143,42 @@
     return "general";
   }
 
+  function normalizedStart(text) {
+    return text.trim().replace(/\s+/g, " ").slice(0, 180);
+  }
+
   function likelyHeading(text) {
     const clean = text.trim().replace(/\s+/g, " ");
     if (!clean || clean.length > 150) return false;
-    return /^((?:[IVXLC]+|\d+|[A-Z])\.?\s+)?[A-Z][A-Za-z\s/&,'’\-()]{2,140}$/.test(clean) ||
-      /^(background|facts|legal standard|standard of review|discussion|analysis|conclusion|order|remedy|jurisdiction|authority|definitions?|exceptions?|requirements?|enforcement)$/i.test(clean);
+    return /^((?:[IVXLC]+|\d+|[A-Z])\.?\s+)?[A-Z][A-Za-z\s/&,'’\-()]{2,140}$/.test(clean);
   }
 
-  function sectionFunction(text) {
-    for (const [pattern, label] of SECTION_RULES) {
-      if (pattern.test(text)) return label;
+  function sectionFunction(text, type) {
+    const start = normalizedStart(text);
+
+    // Court labels must be based on structural headings at the START of a paragraph.
+    // A citation, party argument, or ordinary use of words such as “order,” “remedy,”
+    // “authority,” or “exception” is not enough to classify the passage.
+    if (type === "court") {
+      if (/^(?:I\.?\s+)?BACKGROUND\b|^(?:I\.?\s+)?FACTUAL BACKGROUND\b|^PROCEDURAL HISTORY\b/i.test(start)) return "BACKGROUND / FACTS";
+      if (/^(?:II\.?\s+)?LEGAL STANDARD\b|^STANDARD OF REVIEW\b/i.test(start)) return "RULE / LEGAL STANDARD";
+      if (/^(?:III\.?\s+)?(?:DISCUSSION|ANALYSIS)\b|^ARBITRARY AND CAPRICIOUS CHALLENGE\b|^(?:III|IV)\.?\s+[A-Z][A-Z ]{3,}/.test(start)) return "REASONING / ANALYSIS";
+      if (/^(?:V|VI|VII|VIII|IX|X)\.?\s+REMED(?:Y|IES)\b|^REMED(?:Y|IES)\b/i.test(start)) return "REMEDY";
+      if (/^(?:V|VI|VII|VIII|IX|X)\.?\s+(?:CONCLUSION(?: AND ORDER)?|ORDER)\b|^CONCLUSION(?: AND ORDER)?\b/i.test(start)) return "HOLDING / REMEDY";
+      if (/^JURISDICTION\b/i.test(start)) return "JURISDICTION";
+      return null;
     }
+
+    // Other legal sources also use conservative heading-first classification.
+    if (/^(?:[IVXLC]+\.?\s+)?(?:BACKGROUND|FACTS|PROCEDURAL HISTORY)\b/i.test(start)) return "BACKGROUND / FACTS";
+    if (/^(?:[IVXLC]+\.?\s+)?(?:LEGAL STANDARD|STANDARD OF REVIEW)\b/i.test(start)) return "RULE / LEGAL STANDARD";
+    if (/^(?:[IVXLC]+\.?\s+)?(?:DISCUSSION|ANALYSIS)\b/i.test(start)) return "REASONING / ANALYSIS";
+    if (/^(?:[IVXLC]+\.?\s+)?(?:DEFINITIONS?)\b/i.test(start)) return "DEFINITIONS";
+    if (/^(?:[IVXLC]+\.?\s+)?(?:EXCEPTIONS?|EXEMPTIONS?)\b/i.test(start)) return "EXCEPTIONS / LIMITS";
+    if (/^(?:[IVXLC]+\.?\s+)?(?:ENFORCEMENT|PENALTIES)\b/i.test(start)) return "ENFORCEMENT / CONSEQUENCE";
+    if (/^(?:[IVXLC]+\.?\s+)?(?:EFFECTIVE DATE)\b/i.test(start)) return "WHEN IT APPLIES";
+    if (/^(?:[IVXLC]+\.?\s+)?(?:AUTHORITY|STATUTORY AUTHORITY)\b/i.test(start)) return "LEGAL AUTHORITY";
+    if (/^(?:[IVXLC]+\.?\s+)?(?:REQUIREMENTS?|OBLIGATIONS?|DUTIES)\b/i.test(start)) return "OPERATIVE RULE";
     return null;
   }
 
@@ -197,11 +208,11 @@
     }
 
     root.querySelectorAll("p").forEach((p) => {
-      const text = p.innerText.trim();
-      if (!text || p.querySelector(":scope > .learning-label")) return;
-      let label = sectionFunction(text);
-      if (!label && likelyHeading(text)) {
-        if (/^(i{1,4}|v?i{0,3}|x)\.?\s+/i.test(text) || /^\d+[.)]?\s+/.test(text)) label = "DOCUMENT SECTION";
+      const paragraphText = p.innerText.trim();
+      if (!paragraphText || p.querySelector(":scope > .learning-label")) return;
+      let label = sectionFunction(paragraphText, type);
+      if (!label && likelyHeading(paragraphText)) {
+        if (/^(i{1,10}|v?i{0,3}|x)\.?\s+/i.test(paragraphText) || /^\d+[.)]?\s+/.test(paragraphText)) label = "DOCUMENT SECTION";
       }
       if (label) {
         const tag = document.createElement("span");
