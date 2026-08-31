@@ -121,8 +121,47 @@
     "DOCUMENT SECTION": "A structural heading in the original document. Statute is not assigning a legal conclusion to it."
   };
 
+  const COURT_LOCATOR_CUES = {
+    ISSUE: [
+      [/\bwhether\b/i, "question-framing word: ‘whether’", 2],
+      [/\b(the question|issue) (before|presented to|is)\b/i, "the court frames a question or issue", 3],
+      [/\bplaintiffs? (challenge|argue|contend|claim)\b/i, "a party frames the challenged legal issue", 1]
+    ],
+    RULE: [
+      [/\b(under|pursuant to)\b.{0,80}\b(U\.?S\.?C\.?|C\.?F\.?R\.?|APA|Act|Rule)\b/i, "a governing source is introduced", 2],
+      [/\b(requires?|provides?|authorizes?|standard requires|must show)\b/i, "language states a legal requirement or standard", 2],
+      [/\bstandard of review\b|\blegal standard\b/i, "explicit legal-standard language", 3]
+    ],
+    HOLDING: [
+      [/\bthe court (holds?|finds?|concludes?|determines?)\b/i, "court-decision language", 3],
+      [/\b(is|are) (unlawful|invalid|arbitrary and capricious|contrary to law)\b/i, "legal conclusion language", 3],
+      [/\btherefore (holds?|finds?|concludes?)\b/i, "conclusive transition", 2]
+    ],
+    REASONING: [
+      [/\bbecause\b|\bgiven that\b|\btherefore\b|\bthus\b/i, "reason-giving language", 1],
+      [/\b(fails?|failed) to (consider|explain|address|show|demonstrate)\b/i, "court evaluates why the agency or party falls short", 3],
+      [/\bnot (reasonable|a reasonable justification|adequately explained)\b/i, "evaluation of the justification", 2]
+    ],
+    REMEDY: [
+      [/\bthe court (orders?|remands?|vacates?|enjoins?|directs?|compels?)\b/i, "court-action language", 3],
+      [/\b(remand(?:ed)?|vacat(?:e|ed|ur)|injunction|retains jurisdiction)\b/i, "remedial or procedural action", 2],
+      [/\bshall (submit|notify|produce|publish|file)\b/i, "mandatory action ordered by the court", 2]
+    ],
+    LIMITS: [
+      [/\bneed not (reach|decide|resolve)\b/i, "court says an issue does not need to be decided", 3],
+      [/\bdeclines? to (decide|reach|resolve|address)\b/i, "court expressly leaves an issue undecided", 3],
+      [/\b(reserved|leaves? open|does not decide|not decide at this time)\b/i, "issue is left open or reserved", 3]
+    ],
+    NEXT: [
+      [/\bwithin \w+(?: \(\d+\))? days\b|\bin \d+ days\b/i, "future deadline", 2],
+      [/\b(status report|supplemental briefing|briefing schedule|further status reports?)\b/i, "future filing or proceeding", 3],
+      [/\bafter .{0,80}\b(issues?|publishes?|files?)\b/i, "a later event triggers the next step", 1]
+    ]
+  };
+
   let supportLevel = localStorage.getItem("statute-reading-support") || "high";
   let lastAnnotatedRoot = null;
+  let activeLocator = null;
 
   function definitionFor(label) {
     return TERM_DEFINITIONS[String(label || "").trim().toUpperCase()] || "Legal-reading concept used to help identify the function of this part of the document.";
@@ -156,9 +195,6 @@
   function sectionFunction(text, type) {
     const start = normalizedStart(text);
 
-    // Court labels must be based on structural headings at the START of a paragraph.
-    // A citation, party argument, or ordinary use of words such as “order,” “remedy,”
-    // “authority,” or “exception” is not enough to classify the passage.
     if (type === "court") {
       if (/^(?:I\.?\s+)?BACKGROUND\b|^(?:I\.?\s+)?FACTUAL BACKGROUND\b|^PROCEDURAL HISTORY\b/i.test(start)) return "BACKGROUND / FACTS";
       if (/^(?:II\.?\s+)?LEGAL STANDARD\b|^STANDARD OF REVIEW\b/i.test(start)) return "RULE / LEGAL STANDARD";
@@ -169,7 +205,6 @@
       return null;
     }
 
-    // Other legal sources also use conservative heading-first classification.
     if (/^(?:[IVXLC]+\.?\s+)?(?:BACKGROUND|FACTS|PROCEDURAL HISTORY)\b/i.test(start)) return "BACKGROUND / FACTS";
     if (/^(?:[IVXLC]+\.?\s+)?(?:LEGAL STANDARD|STANDARD OF REVIEW)\b/i.test(start)) return "RULE / LEGAL STANDARD";
     if (/^(?:[IVXLC]+\.?\s+)?(?:DISCUSSION|ANALYSIS)\b/i.test(start)) return "REASONING / ANALYSIS";
@@ -182,6 +217,101 @@
     return null;
   }
 
+  function ensureLocatorStyles() {
+    if (document.getElementById("statuteLocatorStyles")) return;
+    const style = document.createElement("style");
+    style.id = "statuteLocatorStyles";
+    style.textContent = `
+      .learning-framework .locator-btn{font:inherit;color:inherit;background:transparent;border:0;padding:2px 4px;border-radius:5px;cursor:pointer}
+      .learning-framework .locator-btn:hover,.learning-framework .locator-btn:focus-visible{background:rgba(90,90,90,.09);outline:none}
+      .learning-framework .locator-btn.locator-active{background:rgba(90,90,90,.13);font-weight:700}
+      .locator-status{margin-top:7px;font-size:12px;line-height:1.4;color:var(--muted,#666)}
+      .locator-status strong{color:inherit}
+      #docContent p.locator-candidate{outline:2px solid rgba(120,120,120,.28);outline-offset:4px;border-radius:3px}
+      #docContent p.locator-primary{outline-width:3px;outline-color:rgba(80,80,80,.48)}
+      .locator-cue{display:block;margin:3px 0 7px;font:600 11px/1.25 system-ui,sans-serif;letter-spacing:.01em;color:var(--muted,#666)}
+      .locator-cue button{font:inherit;border:0;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function clearLocator() {
+    document.querySelectorAll("#docContent p.locator-candidate, #docContent p.locator-primary").forEach(p => {
+      p.classList.remove("locator-candidate", "locator-primary");
+      delete p.dataset.locatorScore;
+    });
+    document.querySelectorAll("#docContent .locator-cue").forEach(el => el.remove());
+    document.querySelectorAll(".learning-framework .locator-btn").forEach(btn => btn.classList.remove("locator-active"));
+    const status = document.querySelector(".locator-status");
+    if (status) status.textContent = "Click a concept to find possible passages. Statute shows cues, not conclusions.";
+    activeLocator = null;
+  }
+
+  function scoreCourtParagraph(text, label) {
+    const cues = COURT_LOCATOR_CUES[label] || [];
+    let score = 0;
+    const reasons = [];
+    cues.forEach(([pattern, reason, weight]) => {
+      if (pattern.test(text)) {
+        score += weight;
+        reasons.push(reason);
+      }
+    });
+    return { score, reasons };
+  }
+
+  function locateCourtPassages(label) {
+    const root = document.querySelector("#docContent .doc-body");
+    if (!root) return;
+    clearLocator();
+    activeLocator = label;
+
+    const ranked = [];
+    root.querySelectorAll("p").forEach((p, index) => {
+      const text = p.innerText.replace(/^\s*[A-Z /]+\s*/, "").trim();
+      if (!text || text.length < 35) return;
+      const result = scoreCourtParagraph(text, label);
+      if (result.score >= 2) ranked.push({ p, index, ...result });
+    });
+
+    ranked.sort((a, b) => b.score - a.score || a.index - b.index);
+    const top = ranked.slice(0, 6);
+    top.forEach((item, i) => {
+      item.p.classList.add("locator-candidate");
+      if (i === 0) item.p.classList.add("locator-primary");
+      item.p.dataset.locatorScore = String(item.score);
+      const cue = document.createElement("span");
+      cue.className = "locator-cue";
+      cue.innerHTML = `Possible ${escape(label)} cue · ${escape(item.reasons.slice(0, 2).join(" + "))} · <button type="button">not a conclusion</button>`;
+      item.p.insertBefore(cue, item.p.firstChild);
+    });
+
+    const btn = document.querySelector(`.learning-framework .locator-btn[data-locate="${label}"]`);
+    if (btn) btn.classList.add("locator-active");
+    const status = document.querySelector(".locator-status");
+    if (status) {
+      status.innerHTML = top.length
+        ? `<strong>${top.length} possible ${escape(label.toLowerCase())} passage${top.length === 1 ? "" : "s"}.</strong> These are language cues to inspect, not Statute’s legal conclusion.`
+        : `No strong ${escape(label.toLowerCase())} cues found. That does not mean the document lacks one.`;
+    }
+    if (top[0]) top[0].p.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function wireLocator(type) {
+    const map = document.querySelector(".learning-map");
+    if (!map) return;
+    if (type !== "court") return;
+    map.querySelectorAll(".locator-btn").forEach(btn => {
+      if (btn.dataset.locatorWired) return;
+      btn.dataset.locatorWired = "true";
+      btn.addEventListener("click", () => {
+        const label = btn.dataset.locate;
+        if (activeLocator === label) clearLocator();
+        else locateCourtPassages(label);
+      });
+    });
+  }
+
   function annotateDocument() {
     const root = document.querySelector("#docContent .doc-body");
     if (!root || !root.innerText.trim()) return;
@@ -190,6 +320,7 @@
       return;
     }
 
+    ensureLocatorStyles();
     const text = getDocumentText();
     const type = detectType(text);
     root.dataset.docType = type;
@@ -203,8 +334,12 @@
       const config = STRUCTURES[type];
       const map = document.createElement("div");
       map.className = "learning-map";
-      map.innerHTML = `<div class="learning-map-top"><span class="learning-type">Likely structure: ${escape(config.label)}</span><span class="learning-confidence">Reading aid — source text unchanged</span></div><div class="learning-framework">${config.framework.map(x => `<span title="${escape(definitionFor(x))}">${escape(x)}</span>`).join("<b>→</b>")}</div>`;
+      const framework = type === "court"
+        ? config.framework.map(x => `<button type="button" class="locator-btn" data-locate="${escape(x.toUpperCase())}" title="${escape(definitionFor(x))}">${escape(x)}</button>`).join("<b>→</b>")
+        : config.framework.map(x => `<span title="${escape(definitionFor(x))}">${escape(x)}</span>`).join("<b>→</b>");
+      map.innerHTML = `<div class="learning-map-top"><span class="learning-type">Likely structure: ${escape(config.label)}</span><span class="learning-confidence">Reading aid — source text unchanged</span></div><div class="learning-framework">${framework}</div>${type === "court" ? `<div class="locator-status">Click a concept to find possible passages. Statute shows cues, not conclusions.</div>` : ""}`;
       docTitle.insertAdjacentElement("afterend", map);
+      wireLocator(type);
     }
 
     root.querySelectorAll("p").forEach((p) => {
@@ -263,7 +398,7 @@
     html += `<div class="analysis-intro"><strong>You still do the reading.</strong> This mode adapts the questions to the document and directs your attention. It does not replace the source with an AI answer.</div>`;
     html += `<div class="reading-path">`;
     config.prompts.forEach(([label, question, hint], i) => {
-      html += `<details class="analysis-step" ${i === 0 ? "open" : ""}><summary><span>${i + 1}</span><div><small title="${escape(definitionFor(label))}">${escape(label)}</small>${escape(question)}</div></summary><div class="analysis-step-body"><p>${escape(hint)}</p><textarea placeholder="Write what you find in the document…"></textarea><button type="button" class="jump-source">Look back at source</button></div></details>`;
+      html += `<details class="analysis-step" ${i === 0 ? "open" : ""}><summary><span>${i + 1}</span><div><small title="${escape(definitionFor(label))}">${escape(label)}</small>${escape(question)}</div></summary><div class="analysis-step-body"><p>${escape(hint)}</p><textarea placeholder="Write what you find in the document…"></textarea>${type === "court" && COURT_LOCATOR_CUES[label] ? `<button type="button" class="find-likely" data-locate="${escape(label)}">Find likely passage</button>` : ""}<button type="button" class="jump-source">Look back at source</button></div></details>`;
     });
     html += `</div><div class="analysis-stuck"><strong>Stuck?</strong> Select a passage in the document and use <em>Explain</em> or <em>Define</em>. The goal is to get more help at the point of difficulty, not skip the reading.</div>`;
     guide.innerHTML = html;
@@ -271,6 +406,10 @@
     guide.querySelectorAll(".jump-source").forEach(btn => btn.addEventListener("click", () => {
       document.getElementById("tabDoc")?.click();
       document.getElementById("docPane")?.scrollTo({ top: 0, behavior: "smooth" });
+    }));
+    guide.querySelectorAll(".find-likely").forEach(btn => btn.addEventListener("click", () => {
+      locateCourtPassages(btn.dataset.locate);
+      document.getElementById("tabDoc")?.click();
     }));
   }
 
