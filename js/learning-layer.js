@@ -79,6 +79,47 @@
     }
   };
 
+  const TERM_DEFINITIONS = {
+    "ISSUE": "The specific legal question or dispute the court or decision-maker must resolve.",
+    "RULE": "The controlling legal standard used to decide the issue, such as a statute, regulation, or prior case.",
+    "HOLDING": "What the court actually decided on the legal issue, not merely what it discussed or what a party argued.",
+    "REASONING": "Why the court reached its conclusion — how it applied the legal rule to the facts and arguments.",
+    "REMEDY": "What the court does as a result, such as vacating a rule, issuing an injunction, awarding relief, or sending the matter back.",
+    "LIMITS": "What the decision does not resolve, including issues the court leaves open or declines to reach.",
+    "NEXT": "What happens procedurally after this document, such as further briefing, remand, appeal, implementation, or a deadline.",
+    "BACKGROUND / FACTS": "The factual and procedural context needed to understand the dispute before the legal analysis begins.",
+    "RULE / LEGAL STANDARD": "The law or test the court uses to evaluate the issue.",
+    "REASONING / ANALYSIS": "The part where the court applies the governing law to the facts and arguments.",
+    "HOLDING / REMEDY": "What the court actually decided and what it orders as a result. The holding is the legal decision; the remedy is the action the court takes because of that decision.",
+    "JURISDICTION": "The legal authority of a court or agency to hear a case or act on a matter.",
+    "WHEN IT APPLIES": "The effective date, triggering event, or timing condition that determines when the rule applies.",
+    "LEGAL AUTHORITY": "The statute, regulation, precedent, or delegated power that permits or controls the legal action.",
+    "DEFINITIONS": "Terms the legal document gives a specific meaning, which may differ from everyday usage.",
+    "EXCEPTIONS / LIMITS": "Language that narrows the general rule or identifies situations where it does not fully apply.",
+    "OPERATIVE RULE": "The part of the text that actually creates a duty, right, prohibition, permission, or requirement.",
+    "ENFORCEMENT / CONSEQUENCE": "What can happen if the rule is violated or how the requirement can be enforced.",
+    "SCOPE": "Who, what, or which situations the legal rule covers.",
+    "WHO": "The person, employer, employee, agency, or other actor to whom the rule applies.",
+    "TRIGGER": "The event or condition that makes a legal rule begin to apply.",
+    "CONDITIONS": "Requirements that must be satisfied before the rule or legal consequence applies.",
+    "EXCEPTIONS": "Situations carved out from a broader rule.",
+    "DOCUMENTATION": "Records, notices, filings, or proof the law requires someone to create, keep, or provide.",
+    "EFFECT": "The legal or practical consequence once the rule applies.",
+    "ENFORCEMENT": "The mechanism used to make a legal requirement effective, including penalties, agency action, or court remedies.",
+    "AUTHORITY": "The legal source or delegated power that allows a court, agency, or official to act.",
+    "PURPOSE": "Why the document or provision exists and the problem it is intended to address.",
+    "INTERPRETATION": "How a court or agency explains the meaning of a legal rule or text.",
+    "INSTRUCTIONS": "Practical steps the document tells the reader to follow.",
+    "ACTION": "What the reader or other actor is expected to do next.",
+    "CONTEXT": "The surrounding facts, history, and legal setting needed to understand the document.",
+    "RULE / DECISION": "The operative rule or the actual legal decision that matters most in the document.",
+    "IMPACT": "Who is affected and what changes legally or practically.",
+    "WHY": "The stated reason the agency, court, or drafter is taking the action.",
+    "OLD RULE": "The legal rule or practice that existed before the change.",
+    "NEW RULE": "The new legal requirement, standard, or practice created or adopted by the document.",
+    "EFFECTIVE DATE": "The date the legal change actually begins to apply. It may differ from the publication date."
+  };
+
   const SECTION_RULES = [
     [/\b(background|factual background|facts|procedural history)\b/i, "BACKGROUND / FACTS"],
     [/\b(legal standard|standard of review)\b/i, "RULE / LEGAL STANDARD"],
@@ -96,6 +137,10 @@
 
   let supportLevel = localStorage.getItem("statute-reading-support") || "high";
   let lastAnnotatedRoot = null;
+
+  function definitionFor(label) {
+    return TERM_DEFINITIONS[String(label || "").trim().toUpperCase()] || "Legal-reading concept used to help identify the function of this part of the document.";
+  }
 
   function getDocumentText() {
     const body = document.querySelector("#docContent .doc-body");
@@ -147,7 +192,7 @@
       const config = STRUCTURES[type];
       const map = document.createElement("div");
       map.className = "learning-map";
-      map.innerHTML = `<div class="learning-map-top"><span class="learning-type">Likely structure: ${escape(config.label)}</span><span class="learning-confidence">Reading aid — source text unchanged</span></div><div class="learning-framework">${config.framework.map(x => `<span>${escape(x)}</span>`).join("<b>→</b>")}</div>`;
+      map.innerHTML = `<div class="learning-map-top"><span class="learning-type">Likely structure: ${escape(config.label)}</span><span class="learning-confidence">Reading aid — source text unchanged</span></div><div class="learning-framework">${config.framework.map(x => `<span title="${escape(definitionFor(x))}">${escape(x)}</span>`).join("<b>→</b>")}</div>`;
       docTitle.insertAdjacentElement("afterend", map);
     }
 
@@ -162,7 +207,7 @@
         const tag = document.createElement("span");
         tag.className = "learning-label";
         tag.textContent = label;
-        tag.title = "Learning label added by Statute. The document text itself has not been changed.";
+        tag.title = definitionFor(label);
         p.insertBefore(tag, p.firstChild);
       }
     });
@@ -207,7 +252,7 @@
     html += `<div class="analysis-intro"><strong>You still do the reading.</strong> This mode adapts the questions to the document and directs your attention. It does not replace the source with an AI answer.</div>`;
     html += `<div class="reading-path">`;
     config.prompts.forEach(([label, question, hint], i) => {
-      html += `<details class="analysis-step" ${i === 0 ? "open" : ""}><summary><span>${i + 1}</span><div><small>${escape(label)}</small>${escape(question)}</div></summary><div class="analysis-step-body"><p>${escape(hint)}</p><textarea placeholder="Write what you find in the document…"></textarea><button type="button" class="jump-source">Look back at source</button></div></details>`;
+      html += `<details class="analysis-step" ${i === 0 ? "open" : ""}><summary><span>${i + 1}</span><div><small title="${escape(definitionFor(label))}">${escape(label)}</small>${escape(question)}</div></summary><div class="analysis-step-body"><p>${escape(hint)}</p><textarea placeholder="Write what you find in the document…"></textarea><button type="button" class="jump-source">Look back at source</button></div></details>`;
     });
     html += `</div><div class="analysis-stuck"><strong>Stuck?</strong> Select a passage in the document and use <em>Explain</em> or <em>Define</em>. The goal is to get more help at the point of difficulty, not skip the reading.</div>`;
     guide.innerHTML = html;
