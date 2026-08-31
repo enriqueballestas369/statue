@@ -1,9 +1,7 @@
 /**
  * glossary.js
- * A small, static dictionary of common legal terms and a function that
- * scans rendered document text and wraps exact matches with a definition
- * on click. This is deterministic pattern matching against a fixed list —
- * not AI-generated interpretation of the document.
+ * Static legal-term definitions and acronym expansions for document reading.
+ * This is deterministic pattern matching against fixed lists — not AI analysis.
  */
 
 const LEGAL_GLOSSARY = [
@@ -37,14 +35,50 @@ const LEGAL_GLOSSARY = [
   { term: "provided that", def: "Introduces a condition or exception to what was just stated." }
 ];
 
+// Common acronyms encountered in federal legal, administrative, immigration,
+// employment, and H-2A materials. Hovering shows the full name so the reader
+// does not have to mentally decode initials while following the source.
+const LEGAL_ACRONYMS = [
+  { term: "IFR", def: "Interim Final Rule" },
+  { term: "NPRM", def: "Notice of Proposed Rulemaking" },
+  { term: "FR", def: "Federal Register" },
+  { term: "USC", def: "United States Code" },
+  { term: "U.S.C.", def: "United States Code" },
+  { term: "CFR", def: "Code of Federal Regulations" },
+  { term: "C.F.R.", def: "Code of Federal Regulations" },
+  { term: "DOL", def: "United States Department of Labor" },
+  { term: "USCIS", def: "United States Citizenship and Immigration Services" },
+  { term: "DHS", def: "United States Department of Homeland Security" },
+  { term: "DOJ", def: "United States Department of Justice" },
+  { term: "USDA", def: "United States Department of Agriculture" },
+  { term: "ETA", def: "Employment and Training Administration" },
+  { term: "OFLC", def: "Office of Foreign Labor Certification" },
+  { term: "WHD", def: "Wage and Hour Division" },
+  { term: "SWA", def: "State Workforce Agency" },
+  { term: "AEWR", def: "Adverse Effect Wage Rate" },
+  { term: "H-2A", def: "H-2A Temporary Agricultural Worker Program" },
+  { term: "APA", def: "Administrative Procedure Act" },
+  { term: "INA", def: "Immigration and Nationality Act" },
+  { term: "FLSA", def: "Fair Labor Standards Act" },
+  { term: "MSPA", def: "Migrant and Seasonal Agricultural Worker Protection Act" },
+  { term: "OSHA", def: "Occupational Safety and Health Administration" },
+  { term: "EEOC", def: "Equal Employment Opportunity Commission" },
+  { term: "ALJ", def: "Administrative Law Judge" },
+  { term: "SOP", def: "Standard Operating Procedure" }
+];
+
 /**
- * Wraps exact (case-insensitive, word-boundary) matches of glossary terms
- * inside a container element with a .term span carrying a hidden definition.
- * Longer phrases are matched before shorter ones so "summary judgment"
- * isn't partially swallowed by a shorter term.
+ * Wraps exact matches of glossary terms and acronyms in a tooltip span.
+ * Longer phrases are matched before shorter ones.
+ * Acronyms are case-sensitive to avoid highlighting ordinary words such as
+ * "may" or short letter combinations unintentionally.
  */
 function applyGlossary(containerEl) {
-  const sorted = [...LEGAL_GLOSSARY].sort((a, b) => b.term.length - a.term.length);
+  const entries = [
+    ...LEGAL_GLOSSARY.map((entry) => ({ ...entry, acronym: false })),
+    ...LEGAL_ACRONYMS.map((entry) => ({ ...entry, acronym: true }))
+  ].sort((a, b) => b.term.length - a.term.length);
+
   const walker = document.createTreeWalker(containerEl, NodeFilter.SHOW_TEXT, null);
   const textNodes = [];
   let node;
@@ -56,15 +90,17 @@ function applyGlossary(containerEl) {
     let html = escapeHtml(textNode.nodeValue);
     let matchedAny = false;
 
-    sorted.forEach(({ term, def }) => {
+    entries.forEach(({ term, def, acronym }) => {
       const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(`\\b(${escapedTerm})\\b`, "gi");
+      const flags = acronym ? "g" : "gi";
+      const re = new RegExp(`(?<![A-Za-z0-9])(${escapedTerm})(?![A-Za-z0-9])`, flags);
+
       if (re.test(html)) {
         matchedAny = true;
         html = html.replace(
           re,
           (m) =>
-            `<span class="term" data-term="${escapeHtml(term)}">${m}<span class="term-def">${escapeHtml(def)}</span></span>`
+            `<span class="term${acronym ? " acronym" : ""}" data-term="${escapeHtml(term)}" tabindex="0">${m}<span class="term-def">${acronym ? `<strong>${escapeHtml(term)}</strong> — ` : ""}${escapeHtml(def)}</span></span>`
         );
       }
     });
@@ -81,7 +117,8 @@ function escapeHtml(str) {
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function wireGlossaryClicks(containerEl) {
@@ -91,6 +128,13 @@ function wireGlossaryClicks(containerEl) {
       const isOpen = t.classList.contains("show-def");
       containerEl.querySelectorAll(".term").forEach((x) => x.classList.remove("show-def"));
       if (!isOpen) t.classList.add("show-def");
+    });
+
+    t.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        t.click();
+      }
     });
   });
 }
