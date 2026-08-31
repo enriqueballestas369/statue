@@ -4,6 +4,10 @@
   "private": true,
   "description": "A legal-reading tutor. Upload a document, work through it with a five-question guide, keep the source visible the whole time.",
   "scripts": {
+    "postinstall": "node scripts/copy-pdfjs.js",
     "dev": "npx --yes serve . -l 5173"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^6.3.289"
   }
 }
