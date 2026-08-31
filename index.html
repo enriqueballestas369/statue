@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;1,8..60,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/learning-layer.css">
 <!--
   PDF.js is not loaded here as a CDN <script>. It's loaded on demand,
   same-origin, from /vendor/pdfjs/pdf.min.mjs via a dynamic import()
@@ -17,7 +18,6 @@
 </head>
 <body>
 
-<!-- ================= LANDING ================= -->
 <section id="landing" class="screen active">
   <div class="wrap">
     <div class="brand"><span class="mark"></span>Statute</div>
@@ -57,7 +57,6 @@
   <div class="disclaimer">Educational legal-reading tool. Not legal advice — verify conclusions and consult qualified counsel when needed.</div>
 </section>
 
-<!-- ================= READER ================= -->
 <section id="reader" class="screen">
   <div class="reader-header">
     <div class="header-left">
@@ -75,7 +74,7 @@
       </div>
       <div class="mode-toggle">
         <button id="modeGuide" class="active">Guide me</button>
-        <button id="modeAnalyze">Analyze for me</button>
+        <button id="modeAnalyze">Analyze with me</button>
       </div>
     </div>
   </div>
@@ -100,7 +99,6 @@
   </div>
 </section>
 
-<!-- ================= UNDERSTANDING CARD ================= -->
 <section id="cardScreen" class="screen">
   <div class="wrap">
     <div class="step-label">YOUR UNDERSTANDING</div>
@@ -127,5 +125,6 @@
 <script src="js/api.js"></script>
 <script src="js/pdf-reader.js"></script>
 <script src="js/app.js"></script>
+<script src="js/learning-layer.js"></script>
 </body>
 </html>
