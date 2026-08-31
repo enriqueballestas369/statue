@@ -1,0 +1,9 @@
+{
+  "name": "statute-legal-reading-tutor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A legal-reading tutor. Upload a document, work through it with a five-question guide, keep the source visible the whole time.",
+  "scripts": {
+    "dev": "npx --yes serve . -l 5173"
+  }
+}
