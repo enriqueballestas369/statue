@@ -35,9 +35,6 @@ const LEGAL_GLOSSARY = [
   { term: "provided that", def: "Introduces a condition or exception to what was just stated." }
 ];
 
-// Common acronyms encountered in federal legal, administrative, immigration,
-// employment, and H-2A materials. Hovering shows the full name so the reader
-// does not have to mentally decode initials while following the source.
 const LEGAL_ACRONYMS = [
   { term: "IFR", def: "Interim Final Rule" },
   { term: "NPRM", def: "Notice of Proposed Rulemaking" },
@@ -67,12 +64,22 @@ const LEGAL_ACRONYMS = [
   { term: "SOP", def: "Standard Operating Procedure" }
 ];
 
-/**
- * Wraps exact matches of glossary terms and acronyms in a tooltip span.
- * Longer phrases are matched before shorter ones.
- * Acronyms are case-sensitive to avoid highlighting ordinary words such as
- * "may" or short letter combinations unintentionally.
- */
+// Existing styles supported click-to-open. Add hover/focus without changing
+// the visual design or requiring another stylesheet.
+(() => {
+  if (document.getElementById("statute-glossary-hover-style")) return;
+  const style = document.createElement("style");
+  style.id = "statute-glossary-hover-style";
+  style.textContent = `
+    .term:hover > .term-def,
+    .term:focus > .term-def,
+    .term.show-def > .term-def { display:block; }
+    .term.acronym { border-bottom-style:dotted; }
+    .term.acronym .term-def strong { color:#fff; font-weight:600; }
+  `;
+  document.head.appendChild(style);
+})();
+
 function applyGlossary(containerEl) {
   const entries = [
     ...LEGAL_GLOSSARY.map((entry) => ({ ...entry, acronym: false })),
